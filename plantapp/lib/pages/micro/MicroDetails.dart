@@ -38,7 +38,11 @@ class _MicroPageState extends State<MicroPage> {
       final userGardensRef = _dbRef.child('users/${user.uid}/gardens');
       userGardensRef.onValue.listen((event) {
         final userGardenData = event.snapshot.value as Map<dynamic, dynamic>? ?? {};
-        final userGardenIds = userGardenData.keys.toList();
+        // Chỉ lấy các khu vườn có trạng thái true
+        final userGardenIds = userGardenData.entries
+            .where((entry) => entry.value == true)
+            .map((entry) => entry.key)
+            .toList();
 
         final gardensRef = _dbRef.child('gardens');
         gardensRef.onValue.listen((gardenEvent) {
@@ -87,20 +91,16 @@ class _MicroPageState extends State<MicroPage> {
     });
   }
 
-  void _addPot(String name, Map<String, dynamic> gardenData) {
+  void _addGarden(String name, Map<String, dynamic> gardenData) {
     setState(() {
-      gardenData['id'] = _dbRef.child('gardens').push().key;
-      allGardens.add(gardenData);
-      groupedGardens['Chưa phân khu'] = groupedGardens['Chưa phân khu'] ?? [];
-      groupedGardens['Chưa phân khu']!.add(gardenData);
+      // Kiểm tra xem khu vườn đã tồn tại trong allGardens chưa
+      if (!allGardens.any((g) => g['id'] == gardenData['id'])) {
+        allGardens.add(gardenData);
+        groupedGardens['Chưa phân khu'] = groupedGardens['Chưa phân khu'] ?? [];
+        groupedGardens['Chưa phân khu']!.add(gardenData);
+      }
     });
-
-    final user = _auth.currentUser;
-    if (user != null) {
-      final newGardenId = gardenData['id'];
-      _dbRef.child('gardens/$newGardenId').set(gardenData);
-      _dbRef.child('users/${user.uid}/gardens/$newGardenId').set(true);
-    }
+    // Không cần thêm vào Firebase vì AddGardenPage đã xử lý
   }
 
   void _addRegion(String regionName) {
@@ -284,7 +284,7 @@ class _MicroPageState extends State<MicroPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => AddPotPage(onAddPot: _addPot),
+                  builder: (context) => AddGardenPage(onAddGarden: _addGarden),
                 ),
               );
             },

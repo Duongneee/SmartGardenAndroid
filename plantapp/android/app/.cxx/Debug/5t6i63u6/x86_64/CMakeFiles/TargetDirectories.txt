@@ -1,0 +1,2 @@
+E:/Code/SmartGardenAndroid/plantapp/android/app/.cxx/Debug/5t6i63u6/x86_64/CMakeFiles/edit_cache.dir
+E:/Code/SmartGardenAndroid/plantapp/android/app/.cxx/Debug/5t6i63u6/x86_64/CMakeFiles/rebuild_cache.dir

@@ -56,12 +56,12 @@ class _UserLoginState extends State<UserLogin> {
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
-      if (!userCredential.user!.emailVerified) {
-        setState(() {
-          errorMessage = 'Vui lòng xác nhận email trước khi đăng nhập.';
-        });
-        return;
-      }
+      // if (!userCredential.user!.emailVerified) {
+      //   setState(() {
+      //     errorMessage = 'Vui lòng xác nhận email trước khi đăng nhập.';
+      //   });
+      //   return;
+      // }
       // Lưu thông tin người dùng (nếu cần) và chuyển hướng
       Navigator.pushReplacement(
         context,

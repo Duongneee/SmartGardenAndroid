@@ -6,25 +6,25 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 
 class NodeDetails extends StatefulWidget {
-  final Map<String, dynamic> garden;
+  final Map<String, dynamic> device;
 
-  const NodeDetails({super.key, required this.garden});
+  const NodeDetails({super.key, required this.device});
 
   @override
   State<NodeDetails> createState() => _NodeDetailsState();
 }
 
 class _NodeDetailsState extends State<NodeDetails> {
-  late DatabaseReference _gardenRef;
+  late DatabaseReference _deviceRef;
   TextEditingController _intervalController = TextEditingController();
-  TextEditingController _gardenNameController = TextEditingController();
+  TextEditingController _deviceNameController = TextEditingController();
 
   String sensedsoil = "0";
   int motor = 0; // 0: Tắt, 1: Bật, 20: Tự động (tắt), 21: Tự động (bật)
   double soilMax = 95;
   double soilMin = 70;
   int dataInterval = 60;
-  String gardenName = "";
+  String deviceName = "";
   Map<String, dynamic> history = {};
   List<FlSpot> spots = [];
   List<String> timeLabels = [];
@@ -40,16 +40,16 @@ class _NodeDetailsState extends State<NodeDetails> {
   @override
   void initState() {
     super.initState();
-    _gardenRef = FirebaseDatabase.instance.ref().child('gardens/${widget.garden['id']}');
+    _deviceRef = FirebaseDatabase.instance.ref().child('devices/${widget.device['id']}');
 
-    sensedsoil = widget.garden['doAmDat']?['current']?.toString() ?? "0";
-    soilMin = (widget.garden['doAmDat']?['min'] as num?)?.toDouble() ?? 70;
-    soilMax = (widget.garden['doAmDat']?['max'] as num?)?.toDouble() ?? 95;
-    motor = _parseMotorStatus(widget.garden['mayBom']?['trangThai']);
-    dataInterval = widget.garden['time'] ?? 60;
-    gardenName = widget.garden['name'] ?? '';
+    sensedsoil = widget.device['doAmDat']?['current']?.toString() ?? "0";
+    soilMin = (widget.device['doAmDat']?['min'] as num?)?.toDouble() ?? 70;
+    soilMax = (widget.device['doAmDat']?['max'] as num?)?.toDouble() ?? 95;
+    motor = _parseMotorStatus(widget.device['mayBom']?['trangThai']);
+    dataInterval = widget.device['time'] ?? 60;
+    deviceName = widget.device['name'] ?? '';
     _intervalController.text = dataInterval.toString();
-    _gardenNameController.text = gardenName;
+    _deviceNameController.text = deviceName;
 
     _setupListeners();
   }
@@ -59,7 +59,7 @@ class _NodeDetailsState extends State<NodeDetails> {
     if (status == "Tắt" || status == 0) return 0;
     if (status == 20) return 20;
     if (status == 21) return 21;
-    return 0; // Mặc định là Tắt nếu không xác định
+    return 0;
   }
 
   String _getMotorStatusText(int status) {
@@ -78,18 +78,18 @@ class _NodeDetailsState extends State<NodeDetails> {
   }
 
   void _setupListeners() {
-    _gardenRef.onValue.listen((event) {
-      final gardenData = event.snapshot.value as Map<dynamic, dynamic>? ?? {};
+    _deviceRef.onValue.listen((event) {
+      final deviceData = event.snapshot.value as Map<dynamic, dynamic>? ?? {};
       setState(() {
-        sensedsoil = (gardenData['doAmDat']?['current'] ?? 0).toString();
-        soilMin = (gardenData['doAmDat']?['min'] as num?)?.toDouble() ?? 70;
-        soilMax = (gardenData['doAmDat']?['max'] as num?)?.toDouble() ?? 95;
-        motor = _parseMotorStatus(gardenData['mayBom']?['trangThai']);
-        dataInterval = gardenData['time'] ?? 60;
-        gardenName = gardenData['name'] ?? widget.garden['name'];
+        sensedsoil = (deviceData['doAmDat']?['current'] ?? 0).toString();
+        soilMin = (deviceData['doAmDat']?['min'] as num?)?.toDouble() ?? 70;
+        soilMax = (deviceData['doAmDat']?['max'] as num?)?.toDouble() ?? 95;
+        motor = _parseMotorStatus(deviceData['mayBom']?['trangThai']);
+        dataInterval = deviceData['time'] ?? 60;
+        deviceName = deviceData['name'] ?? widget.device['name'];
 
         history = {};
-        final historyRaw = gardenData['doAmDat']?['history'];
+        final historyRaw = deviceData['doAmDat']?['history'];
         if (historyRaw is Map) {
           history = Map<String, dynamic>.from(
             historyRaw.map((key, value) => MapEntry(key.toString(), value)),
@@ -136,7 +136,7 @@ class _NodeDetailsState extends State<NodeDetails> {
             : 100;
 
         _intervalController.text = dataInterval.toString();
-        _gardenNameController.text = gardenName;
+        _deviceNameController.text = deviceName;
 
         final soilValue = double.tryParse(sensedsoil) ?? 0;
         if (soilValue < soilMin) {
@@ -159,7 +159,7 @@ class _NodeDetailsState extends State<NodeDetails> {
     });
 
     int firebaseValue = newMode == 20 ? 20 : newMode;
-    await _gardenRef.child('mayBom').update({
+    await _deviceRef.child('mayBom').update({
       'trangThai': firebaseValue,
     });
   }
@@ -177,7 +177,7 @@ class _NodeDetailsState extends State<NodeDetails> {
       setState(() {
         dataInterval = interval;
       });
-      _gardenRef.update({'time': interval});
+      _deviceRef.update({'time': interval});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Đã cập nhật khoảng thời gian gửi dữ liệu")),
       );
@@ -194,7 +194,7 @@ class _NodeDetailsState extends State<NodeDetails> {
         soilMin = newMin;
         soilMax = newMax;
       });
-      await _gardenRef.child('doAmDat').update({
+      await _deviceRef.child('doAmDat').update({
         'min': newMin,
         'max': newMax,
       });
@@ -208,15 +208,15 @@ class _NodeDetailsState extends State<NodeDetails> {
     }
   }
 
-  void _renameGarden() {
+  void _renameDevice() {
     showDialog(
       context: context,
       builder: (context) {
-        _gardenNameController.text = gardenName;
+        _deviceNameController.text = deviceName;
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
-            'Đổi tên khu vườn',
+            'Đổi tên thiết bị',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.w600,
               fontSize: 20,
@@ -224,13 +224,13 @@ class _NodeDetailsState extends State<NodeDetails> {
             ),
           ),
           content: TextField(
-            controller: _gardenNameController,
+            controller: _deviceNameController,
             decoration: InputDecoration(
-              labelText: "Tên khu vườn",
+              labelText: "Tên thiết bị",
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
-              errorText: _gardenNameController.text.trim().isEmpty
+              errorText: _deviceNameController.text.trim().isEmpty
                   ? 'Tên không được để trống'
                   : null,
             ),
@@ -251,15 +251,15 @@ class _NodeDetailsState extends State<NodeDetails> {
             ),
             TextButton(
               onPressed: () async {
-                final newName = _gardenNameController.text.trim();
+                final newName = _deviceNameController.text.trim();
                 if (newName.isNotEmpty) {
                   try {
-                    await _gardenRef.update({'name': newName});
+                    await _deviceRef.update({'name': newName});
                     setState(() {
-                      gardenName = newName;
+                      deviceName = newName;
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Đã đổi tên khu vườn")),
+                      const SnackBar(content: Text("Đã đổi tên thiết bị")),
                     );
                     Navigator.of(context).pop();
                   } catch (e) {
@@ -269,7 +269,7 @@ class _NodeDetailsState extends State<NodeDetails> {
                   }
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Tên khu vườn không được để trống")),
+                    const SnackBar(content: Text("Tên thiết bị không được để trống")),
                   );
                 }
               },
@@ -287,14 +287,14 @@ class _NodeDetailsState extends State<NodeDetails> {
     );
   }
 
-  void _deleteGarden() {
+  void _deleteDevice() {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
-            'Xóa khu vườn',
+            'Xóa thiết bị',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.w600,
               fontSize: 20,
@@ -302,7 +302,7 @@ class _NodeDetailsState extends State<NodeDetails> {
             ),
           ),
           content: Text(
-            'Bạn có chắc chắn muốn ngừng truy cập khu vườn "$gardenName" không? Khu vườn sẽ không bị xóa, chỉ bị ẩn khỏi danh sách của bạn.',
+            'Bạn có chắc chắn muốn ngừng truy cập thiết bị "$deviceName" không? Thiết bị sẽ không bị xóa, chỉ bị ẩn khỏi danh sách của bạn.',
             style: GoogleFonts.poppins(fontSize: 16),
           ),
           actions: [
@@ -327,19 +327,43 @@ class _NodeDetailsState extends State<NodeDetails> {
                     return;
                   }
 
-                  await FirebaseDatabase.instance
-                      .ref()
-                      .child('users/$userId/gardens/${widget.garden['id']}')
-                      .set(false);
+                  final userDevicesRef = FirebaseDatabase.instance.ref().child('users/$userId/devices');
+                  final userGroupsRef = FirebaseDatabase.instance.ref().child('users/$userId/groups');
+                  final deviceSnapshot = await userDevicesRef.child(widget.device['id']).once();
+                  final groupsSnapshot = await userGroupsRef.once();
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Đã ẩn khu vườn khỏi danh sách của bạn")),
-                  );
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pop();
+                  bool foundInDevices = deviceSnapshot.snapshot.value == true;
+                  bool foundInGroups = false;
+
+                  if (foundInDevices || deviceSnapshot.snapshot.value == null) {
+                    // Đặt false trong users/<userId>/devices
+                    await userDevicesRef.child(widget.device['id']).set(false);
+
+                    // Kiểm tra và đặt false trong groups nếu tồn tại
+                    if (groupsSnapshot.snapshot.exists) {
+                      final groupsData = groupsSnapshot.snapshot.value as Map<dynamic, dynamic>? ?? {};
+                      groupsData.forEach((groupId, groupData) {
+                        final devices = (groupData['devices'] as Map<dynamic, dynamic>?) ?? {};
+                        if (devices.containsKey(widget.device['id'])) {
+                          userGroupsRef.child('$groupId/devices/${widget.device['id']}').set(false);
+                          foundInGroups = true;
+                        }
+                      });
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Đã ẩn thiết bị khỏi danh sách của bạn")),
+                    );
+                    Navigator.of(context).pop(); // Đóng dialog
+                    Navigator.of(context).pop(); // Quay lại MicroPage
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Thiết bị không thuộc về tài khoản của bạn hoặc đã bị ẩn trước đó.")),
+                    );
+                  }
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Lỗi khi ẩn khu vườn: $e")),
+                    SnackBar(content: Text("Lỗi khi ẩn thiết bị: $e")),
                   );
                 }
               },
@@ -413,7 +437,7 @@ class _NodeDetailsState extends State<NodeDetails> {
                 child: Column(
                   children: [
                     Text(
-                      "Garden Details",
+                      "Device Details",
                       style: GoogleFonts.poppins(
                         color: const Color.fromRGBO(0, 100, 53, 1),
                         fontWeight: FontWeight.w700,
@@ -426,7 +450,7 @@ class _NodeDetailsState extends State<NodeDetails> {
                       children: [
                         Expanded(
                           child: Text(
-                            gardenName,
+                            deviceName,
                             style: GoogleFonts.poppins(
                               color: Colors.grey[800],
                               fontWeight: FontWeight.w600,
@@ -437,13 +461,13 @@ class _NodeDetailsState extends State<NodeDetails> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.edit, color: Color.fromRGBO(74, 173, 82, 1)),
-                          onPressed: _renameGarden,
-                          tooltip: 'Đổi tên khu vườn',
+                          onPressed: _renameDevice,
+                          tooltip: 'Đổi tên thiết bị',
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: _deleteGarden,
-                          tooltip: 'Xóa khu vườn',
+                          onPressed: _deleteDevice,
+                          tooltip: 'Xóa thiết bị',
                         ),
                       ],
                     ),
@@ -513,7 +537,6 @@ class _NodeDetailsState extends State<NodeDetails> {
                 ),
               ),
               const SizedBox(height: 20),
-              // Biểu đồ lịch sử độ ẩm
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
                 padding: const EdgeInsets.all(15),
@@ -742,7 +765,6 @@ class _NodeDetailsState extends State<NodeDetails> {
                 ),
               ),
               const SizedBox(height: 20),
-              // Khoảng thời gian gửi dữ liệu
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
                 padding: const EdgeInsets.all(15),
@@ -808,7 +830,6 @@ class _NodeDetailsState extends State<NodeDetails> {
                 ),
               ),
               const SizedBox(height: 20),
-              // Điều chỉnh ngưỡng độ ẩm đất
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
                 padding: const EdgeInsets.all(15),
@@ -876,7 +897,7 @@ class _NodeDetailsState extends State<NodeDetails> {
               SmartPlanting(
                 motorSwitch: motorSwitch,
                 motor: motor,
-                gardenData: widget.garden,
+                deviceData: widget.device,
                 onSoilMoistureChange: handleSoilMoistureChange,
               ),
               const SizedBox(height: 40),
@@ -948,14 +969,14 @@ class SensorDetails extends StatelessWidget {
 class SmartPlanting extends StatelessWidget {
   final Function(int) motorSwitch;
   final int motor;
-  final Map<String, dynamic> gardenData;
+  final Map<String, dynamic> deviceData;
   final Function(String, Color) onSoilMoistureChange;
 
   const SmartPlanting({
     super.key,
     required this.motorSwitch,
     required this.motor,
-    required this.gardenData,
+    required this.deviceData,
     required this.onSoilMoistureChange,
   });
 

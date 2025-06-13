@@ -13,94 +13,110 @@ class MicroPage extends StatefulWidget {
 }
 
 class _MicroPageState extends State<MicroPage> {
-  Map<String, List<Map<String, dynamic>>> groupedGardens = {};
-  List<Map<String, dynamic>> allGardens = [];
+  Map<String, List<Map<String, dynamic>>> groupedDevices = {};
+  List<Map<String, dynamic>> allDevices = [];
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadGardens();
+    _loadDevices();
   }
 
-  void _loadGardens() {
-    _auth.authStateChanges().listen((User? user) {
-      if (user == null) {
-        print("User not logged in");
-        setState(() {
-          groupedGardens = {};
-          allGardens = [];
-        });
-        return;
-      }
-
-      final userGardensRef = _dbRef.child('users/${user.uid}/gardens');
-      userGardensRef.onValue.listen((event) {
-        final userGardenData = event.snapshot.value as Map<dynamic, dynamic>? ?? {};
-        // Chỉ lấy các khu vườn có trạng thái true
-        final userGardenIds = userGardenData.entries
-            .where((entry) => entry.value == true)
-            .map((entry) => entry.key)
-            .toList();
-
-        final gardensRef = _dbRef.child('gardens');
-        gardensRef.onValue.listen((gardenEvent) {
-          final allGardensData = gardenEvent.snapshot.value as Map<dynamic, dynamic>? ?? {};
-          allGardens = userGardenIds
-              .where((id) => allGardensData[id] != null)
-              .map((id) => {
-            'id': id,
-            ...Map<String, dynamic>.from(allGardensData[id] as Map),
-          })
-              .toList();
-
-          final groupsRef = _dbRef.child('users/${user.uid}/groups');
-          groupsRef.onValue.listen((groupEvent) {
-            final groupsData = groupEvent.snapshot.value as Map<dynamic, dynamic>? ?? {};
-            final Map<String, List<Map<String, dynamic>>> tempGroupedGardens = {
-              'Chưa phân khu': [],
-            };
-
-            groupsData.forEach((groupId, groupData) {
-              final groupName = groupData['name'] as String? ?? 'Unnamed Group';
-              tempGroupedGardens[groupName] = [];
-            });
-
-            for (var garden in allGardens) {
-              bool assigned = false;
-              groupsData.forEach((groupId, groupData) {
-                final groupName = groupData['name'] as String? ?? 'Unnamed Group';
-                final groupGardens = (groupData['gardens'] as Map<dynamic, dynamic>?) ?? {};
-                if (groupGardens.containsKey(garden['id'])) {
-                  tempGroupedGardens[groupName]!.add(garden);
-                  assigned = true;
-                }
-              });
-              if (!assigned) {
-                tempGroupedGardens['Chưa phân khu']!.add(garden);
-              }
-            }
-
-            setState(() {
-              groupedGardens = tempGroupedGardens;
-            });
-          });
-        });
+  void _loadDevices() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      print("User not logged in");
+      setState(() {
+        groupedDevices = {};
+        allDevices = [];
+        _isLoading = false;
       });
-    });
+      return;
+    }
+
+    final userDevicesRef = _dbRef.child('users/${user.uid}/devices');
+    final devicesRef = _dbRef.child('devices');
+    final groupsRef = _dbRef.child('users/${user.uid}/groups');
+
+    try {
+      final userDeviceSnapshot = await userDevicesRef.once();
+      final deviceSnapshot = await devicesRef.once();
+      final groupSnapshot = await groupsRef.once();
+
+      final userDeviceData = userDeviceSnapshot.snapshot.value as Map<dynamic, dynamic>? ?? {};
+      final allDevicesData = deviceSnapshot.snapshot.value as Map<dynamic, dynamic>? ?? {};
+      final groupsData = groupSnapshot.snapshot.value as Map<dynamic, dynamic>? ?? {};
+
+      // Lọc các deviceId có trạng thái true
+      final userDeviceIds = userDeviceData.entries
+          .where((entry) => entry.value == true)
+          .map((entry) => entry.key.toString())
+          .toList();
+
+      // Lấy thông tin chi tiết của các thiết bị có trạng thái true
+      allDevices = userDeviceIds
+          .where((id) => allDevicesData[id] != null)
+          .map((id) => {
+        'id': id,
+        ...Map<String, dynamic>.from(allDevicesData[id] as Map),
+      })
+          .toList();
+
+      final Map<String, List<Map<String, dynamic>>> tempGroupedDevices = {
+        'Chưa phân khu': [],
+      };
+
+      groupsData.forEach((groupId, groupData) {
+        final groupName = groupData['name'] as String? ?? 'Unnamed Group';
+        tempGroupedDevices[groupName] = [];
+      });
+
+      for (var device in allDevices) {
+        bool assigned = false;
+        groupsData.forEach((groupId, groupData) {
+          final groupName = groupData['name'] as String? ?? 'Unnamed Group';
+          final groupDevices = (groupData['devices'] as Map<dynamic, dynamic>?) ?? {};
+          if (groupName != 'Chưa phân khu' && groupDevices.containsKey(device['id']) && groupDevices[device['id']] == true) {
+            tempGroupedDevices[groupName]!.add(device);
+            assigned = true;
+          }
+        });
+        if (!assigned) {
+          tempGroupedDevices['Chưa phân khu']!.add(device);
+        }
+      }
+
+      setState(() {
+        groupedDevices = tempGroupedDevices;
+        _isLoading = false;
+        print("Loaded allDevices: $allDevices"); // Debug log
+        print("Grouped devices: $groupedDevices"); // Debug log
+      });
+    } catch (e) {
+      print("Error loading devices: $e");
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
-  void _addGarden(String name, Map<String, dynamic> gardenData) {
+  void _addDevice(String name, Map<String, dynamic> deviceData) {
     setState(() {
-      // Kiểm tra xem khu vườn đã tồn tại trong allGardens chưa
-      if (!allGardens.any((g) => g['id'] == gardenData['id'])) {
-        allGardens.add(gardenData);
-        groupedGardens['Chưa phân khu'] = groupedGardens['Chưa phân khu'] ?? [];
-        groupedGardens['Chưa phân khu']!.add(gardenData);
+      if (!allDevices.any((d) => d['id'] == deviceData['id'])) {
+        allDevices.add(deviceData);
+        groupedDevices['Chưa phân khu'] = groupedDevices['Chưa phân khu'] ?? [];
+        groupedDevices['Chưa phân khu']!.add(deviceData);
+
+        // Cập nhật Firebase để thêm thiết bị với trạng thái true
+        final user = _auth.currentUser;
+        if (user != null) {
+          _dbRef.child('users/${user.uid}/devices/${deviceData['id']}').set(true);
+        }
       }
     });
-    // Không cần thêm vào Firebase vì AddGardenPage đã xử lý
   }
 
   void _addRegion(String regionName) {
@@ -109,15 +125,18 @@ class _MicroPageState extends State<MicroPage> {
       final newRegionId = DateTime.now().millisecondsSinceEpoch.toString();
       _dbRef.child('users/${user.uid}/groups/$newRegionId').set({
         'name': regionName,
-        'gardens': {},
-      });
-      setState(() {
-        groupedGardens[regionName] = [];
+        'devices': {},
+      }).then((_) {
+        setState(() {
+          groupedDevices[regionName] = [];
+        });
+      }).catchError((error) {
+        print("Error adding region: $error");
       });
     }
   }
 
-  void _addGardenToRegion(String regionName, String gardenId) {
+  void _addDeviceToRegion(String regionName, String deviceId) {
     final user = _auth.currentUser;
     if (user != null) {
       _dbRef.child('users/${user.uid}/groups').once().then((snapshot) {
@@ -130,20 +149,33 @@ class _MicroPageState extends State<MicroPage> {
         });
 
         if (targetGroupId != null) {
-          _dbRef.child('users/${user.uid}/groups/$targetGroupId/gardens/$gardenId').set(true);
-
-          setState(() {
-            final garden = allGardens.firstWhere((g) => g['id'] == gardenId);
-            groupedGardens['Chưa phân khu']?.removeWhere((g) => g['id'] == gardenId);
-            groupedGardens[regionName] = groupedGardens[regionName] ?? [];
-            groupedGardens[regionName]!.add(garden);
+          _dbRef.child('users/${user.uid}/groups/$targetGroupId/devices/$deviceId')
+              .set(true)
+              .then((_) {
+            setState(() {
+              final device = allDevices.firstWhere(
+                    (d) => d['id'] == deviceId,
+                orElse: () => <String, dynamic>{},
+              );
+              if (device.isNotEmpty) {
+                groupedDevices['Chưa phân khu']?.removeWhere((d) => d['id'] == deviceId);
+                groupedDevices[regionName] = groupedDevices[regionName] ?? [];
+                groupedDevices[regionName]!.add(device);
+              } else {
+                print("Device with ID $deviceId not found in allDevices");
+              }
+            });
+          }).catchError((error) {
+            print("Error adding device to region: $error");
           });
         }
+      }).catchError((error) {
+        print("Error fetching groups: $error");
       });
     }
   }
 
-  void _removeGardenFromRegion(String regionName, String gardenId) {
+  void _removeDeviceFromRegion(String regionName, String deviceId) {
     final user = _auth.currentUser;
     if (user != null) {
       _dbRef.child('users/${user.uid}/groups').once().then((snapshot) {
@@ -156,15 +188,19 @@ class _MicroPageState extends State<MicroPage> {
         });
 
         if (targetGroupId != null) {
-          _dbRef.child('users/${user.uid}/groups/$targetGroupId/gardens/$gardenId').remove();
-
-          setState(() {
-            final garden = groupedGardens[regionName]!.firstWhere((g) => g['id'] == gardenId);
-            groupedGardens[regionName]!.removeWhere((g) => g['id'] == gardenId);
-            groupedGardens['Chưa phân khu'] = groupedGardens['Chưa phân khu'] ?? [];
-            groupedGardens['Chưa phân khu']!.add(garden);
+          _dbRef.child('users/${user.uid}/groups/$targetGroupId/devices/$deviceId')
+              .remove()
+              .then((_) {
+            setState(() {
+              groupedDevices[regionName]?.removeWhere((d) => d['id'] == deviceId);
+            });
+            _loadDevices(); // Tải lại để cập nhật trạng thái
+          }).catchError((error) {
+            print("Error removing device from region: $error");
           });
         }
+      }).catchError((error) {
+        print("Error fetching groups: $error");
       });
     }
   }
@@ -182,15 +218,21 @@ class _MicroPageState extends State<MicroPage> {
         });
 
         if (targetGroupId != null) {
-          _dbRef.child('users/${user.uid}/groups/$targetGroupId').remove();
-
-          setState(() {
-            final gardensToMove = groupedGardens[regionName]!;
-            groupedGardens.remove(regionName);
-            groupedGardens['Chưa phân khu'] = groupedGardens['Chưa phân khu'] ?? [];
-            groupedGardens['Chưa phân khu']!.addAll(gardensToMove);
+          _dbRef.child('users/${user.uid}/groups/$targetGroupId')
+              .remove()
+              .then((_) {
+            setState(() {
+              final devicesToMove = groupedDevices[regionName] ?? [];
+              groupedDevices.remove(regionName);
+              groupedDevices['Chưa phân khu'] = groupedDevices['Chưa phân khu'] ?? [];
+              groupedDevices['Chưa phân khu']!.addAll(devicesToMove);
+            });
+          }).catchError((error) {
+            print("Error removing region: $error");
           });
         }
+      }).catchError((error) {
+        print("Error fetching groups: $error");
       });
     }
   }
@@ -224,24 +266,67 @@ class _MicroPageState extends State<MicroPage> {
     );
   }
 
-  void _showAddGardenToRegionDialog(String regionName) {
-    String? selectedGardenId;
+  void _showAddDeviceToRegionDialog(String regionName) {
+    if (allDevices.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Thông báo"),
+          content: const Text("Không có thiết bị nào để thêm. Vui lòng thêm thiết bị trước."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Đóng"),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    String? selectedDeviceId;
+    final assignedDeviceIds = groupedDevices.entries
+        .where((entry) => entry.key != 'Chưa phân khu')
+        .expand((entry) => entry.value.map((device) => device['id']))
+        .toSet();
+
+    final availableDevices = allDevices.where((device) => !assignedDeviceIds.contains(device['id'])).toList();
+    print("Available devices for $regionName: $availableDevices"); // Debug log
+    print("Assigned device IDs: $assignedDeviceIds"); // Debug log
+
+    if (availableDevices.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Thông báo"),
+          content: const Text("Tất cả thiết bị đã được gán. Vui lòng thêm thiết bị mới."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Đóng"),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Thêm khu vườn vào $regionName"),
+        title: Text("Thêm thiết bị vào $regionName"),
         content: StatefulBuilder(
           builder: (context, setState) => DropdownButtonFormField<String>(
-            decoration: const InputDecoration(labelText: "Chọn khu vườn"),
-            items: groupedGardens['Chưa phân khu']?.map((garden) {
+            decoration: const InputDecoration(labelText: "Chọn thiết bị"),
+            items: availableDevices.map((device) {
               return DropdownMenuItem<String>(
-                value: garden['id'],
-                child: Text(garden['name']),
+                value: device['id'],
+                child: Text(device['name'] ?? 'Unnamed Device'),
               );
-            }).toList() ?? [],
+            }).toList(),
             onChanged: (value) {
               setState(() {
-                selectedGardenId = value;
+                selectedDeviceId = value;
               });
             },
           ),
@@ -253,8 +338,8 @@ class _MicroPageState extends State<MicroPage> {
           ),
           TextButton(
             onPressed: () {
-              if (selectedGardenId != null) {
-                _addGardenToRegion(regionName, selectedGardenId!);
+              if (selectedDeviceId != null) {
+                _addDeviceToRegion(regionName, selectedDeviceId!);
                 Navigator.pop(context);
               }
             },
@@ -284,14 +369,14 @@ class _MicroPageState extends State<MicroPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => AddGardenPage(onAddGarden: _addGarden),
+                  builder: (context) => AddGardenPage(onAddDevice: _addDevice),
                 ),
               );
             },
             backgroundColor: const Color.fromRGBO(0, 100, 53, 1),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
             child: const Icon(Icons.add, color: Colors.white, size: 32),
-            heroTag: "addGarden",
+            heroTag: "addDevice",
           ),
         ],
       ),
@@ -328,7 +413,9 @@ class _MicroPageState extends State<MicroPage> {
             ],
           ),
         ),
-        child: ListView(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
           children: [
             Stack(
               alignment: Alignment.bottomCenter,
@@ -373,19 +460,19 @@ class _MicroPageState extends State<MicroPage> {
               ],
             ),
             const SizedBox(height: 20),
-            if (groupedGardens.isEmpty)
+            if (groupedDevices.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(20.0),
-                  child: Text("No gardens available", style: TextStyle(fontSize: 18, color: Colors.grey)),
+                  child: Text("No devices available", style: TextStyle(fontSize: 18, color: Colors.grey)),
                 ),
               )
             else
-              ...groupedGardens.entries
+              ...groupedDevices.entries
                   .where((entry) => entry.key != 'Chưa phân khu' || entry.value.isNotEmpty)
                   .map((entry) {
                 final regionName = entry.key;
-                final gardensInRegion = entry.value;
+                final devicesInRegion = entry.value;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -407,7 +494,7 @@ class _MicroPageState extends State<MicroPage> {
                               if (regionName != 'Chưa phân khu')
                                 IconButton(
                                   icon: const Icon(Icons.add_circle, color: Colors.green),
-                                  onPressed: () => _showAddGardenToRegionDialog(regionName),
+                                  onPressed: () => _showAddDeviceToRegionDialog(regionName),
                                 ),
                               if (regionName != 'Chưa phân khu')
                                 IconButton(
@@ -419,13 +506,13 @@ class _MicroPageState extends State<MicroPage> {
                         ],
                       ),
                     ),
-                    if (gardensInRegion.isEmpty)
+                    if (devicesInRegion.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.0),
-                        child: Text("No gardens in this region", style: TextStyle(fontSize: 16, color: Colors.grey)),
+                        child: Text("No devices in this region", style: TextStyle(fontSize: 16, color: Colors.grey)),
                       )
                     else
-                      ...gardensInRegion.map((garden) {
+                      ...devicesInRegion.map((device) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
                           child: GestureDetector(
@@ -433,7 +520,7 @@ class _MicroPageState extends State<MicroPage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => NodeDetails(garden: garden),
+                                  builder: (context) => NodeDetails(device: device),
                                 ),
                               );
                             },
@@ -461,7 +548,7 @@ class _MicroPageState extends State<MicroPage> {
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         Text(
-                                          garden['name'],
+                                          device['name'],
                                           style: GoogleFonts.poppins(
                                             color: const Color.fromRGBO(0, 100, 53, 1),
                                             fontWeight: FontWeight.w600,
@@ -470,7 +557,7 @@ class _MicroPageState extends State<MicroPage> {
                                         ),
                                         const SizedBox(height: 5),
                                         Text(
-                                          "Soil: ${garden['doAmDat']?['current'] ?? 'N/A'}%",
+                                          "Soil: ${device['doAmDat']?['current'] ?? 'N/A'}%",
                                           style: GoogleFonts.poppins(
                                             color: Colors.grey[700],
                                             fontWeight: FontWeight.normal,
@@ -478,15 +565,7 @@ class _MicroPageState extends State<MicroPage> {
                                           ),
                                         ),
                                         Text(
-                                          "Max: ${garden['doAmDat']?['max'] ?? 'N/A'}%",
-                                          style: GoogleFonts.poppins(
-                                            color: Colors.grey[700],
-                                            fontWeight: FontWeight.normal,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        Text(
-                                          "Min: ${garden['doAmDat']?['min'] ?? 'N/A'}%",
+                                          "Pump: ${device['mayBom']?['trangThai'] ?? 'N/A'}",
                                           style: GoogleFonts.poppins(
                                             color: Colors.grey[700],
                                             fontWeight: FontWeight.normal,
@@ -500,7 +579,7 @@ class _MicroPageState extends State<MicroPage> {
                                         if (regionName != 'Chưa phân khu')
                                           IconButton(
                                             icon: const Icon(Icons.remove_circle, color: Colors.red),
-                                            onPressed: () => _removeGardenFromRegion(regionName, garden['id']),
+                                            onPressed: () => _removeDeviceFromRegion(regionName, device['id']),
                                           ),
                                         Container(
                                           height: 60,

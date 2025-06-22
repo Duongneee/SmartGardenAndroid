@@ -20,7 +20,7 @@ class _NodeDetailsState extends State<NodeDetails> {
   TextEditingController _deviceNameController = TextEditingController();
 
   String sensedsoil = "0";
-  int motor = 0; // 0: Tắt, 1: Bật, 20: Tự động (tắt), 21: Tự động (bật)
+  int motor = 0;
   double soilMax = 95;
   double soilMin = 70;
   int dataInterval = 60;
@@ -36,6 +36,11 @@ class _NodeDetailsState extends State<NodeDetails> {
   double maxX = 1;
   double minY = 0;
   double maxY = 100;
+
+  double _scale = 1.0;
+  double _previousScale = 1.0;
+  Offset _panOffset = Offset.zero;
+  Offset _previousPanOffset = Offset.zero;
 
   @override
   void initState() {
@@ -121,7 +126,7 @@ class _NodeDetailsState extends State<NodeDetails> {
                 timeLabels.add(DateFormat('dd/MM HH:mm').format(parsedTime));
               }
             } catch (e) {
-              // Bỏ qua nếu dữ liệu không hợp lệ
+              print("Error parsing history entry: $e");
             }
           }
         }
@@ -150,6 +155,8 @@ class _NodeDetailsState extends State<NodeDetails> {
           soilMoistureColor = Colors.green;
         }
       });
+    }, onError: (error) {
+      print("Error listening to device: $error");
     });
   }
 
@@ -159,9 +166,16 @@ class _NodeDetailsState extends State<NodeDetails> {
     });
 
     int firebaseValue = newMode == 20 ? 20 : newMode;
-    await _deviceRef.child('mayBom').update({
-      'trangThai': firebaseValue,
-    });
+    try {
+      await _deviceRef.child('mayBom').update({
+        'trangThai': firebaseValue,
+      });
+    } catch (e) {
+      print("Error updating motor status: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Lỗi khi cập nhật trạng thái máy bơm: $e")),
+      );
+    }
   }
 
   void handleSoilMoistureChange(String condition, Color color) {
@@ -177,10 +191,17 @@ class _NodeDetailsState extends State<NodeDetails> {
       setState(() {
         dataInterval = interval;
       });
-      _deviceRef.update({'time': interval});
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Đã cập nhật khoảng thời gian gửi dữ liệu")),
-      );
+      try {
+        _deviceRef.update({'time': interval});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Đã cập nhật khoảng thời gian gửi dữ liệu")),
+        );
+      } catch (e) {
+        print("Error updating data interval: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Lỗi khi cập nhật khoảng thời gian: $e")),
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Vui lòng nhập số giây hợp lệ")),
@@ -194,13 +215,20 @@ class _NodeDetailsState extends State<NodeDetails> {
         soilMin = newMin;
         soilMax = newMax;
       });
-      await _deviceRef.child('doAmDat').update({
-        'min': newMin,
-        'max': newMax,
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Đã cập nhật ngưỡng độ ẩm đất")),
-      );
+      try {
+        await _deviceRef.child('doAmDat').update({
+          'min': newMin,
+          'max': newMax,
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Đã cập nhật ngưỡng độ ẩm đất")),
+        );
+      } catch (e) {
+        print("Error updating soil moisture range: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Lỗi khi cập nhật ngưỡng độ ẩm: $e")),
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Giá trị không hợp lệ (0-100, min < max)")),
@@ -336,10 +364,8 @@ class _NodeDetailsState extends State<NodeDetails> {
                   bool foundInGroups = false;
 
                   if (foundInDevices || deviceSnapshot.snapshot.value == null) {
-                    // Đặt false trong users/<userId>/devices
                     await userDevicesRef.child(widget.device['id']).set(false);
 
-                    // Kiểm tra và đặt false trong groups nếu tồn tại
                     if (groupsSnapshot.snapshot.exists) {
                       final groupsData = groupsSnapshot.snapshot.value as Map<dynamic, dynamic>? ?? {};
                       groupsData.forEach((groupId, groupData) {
@@ -354,14 +380,15 @@ class _NodeDetailsState extends State<NodeDetails> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("Đã ẩn thiết bị khỏi danh sách của bạn")),
                     );
-                    Navigator.of(context).pop(); // Đóng dialog
-                    Navigator.of(context).pop(); // Quay lại MicroPage
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pop();
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("Thiết bị không thuộc về tài khoản của bạn hoặc đã bị ẩn trước đó.")),
                     );
                   }
                 } catch (e) {
+                  print("Error deleting device: $e");
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text("Lỗi khi ẩn thiết bị: $e")),
                   );
@@ -568,141 +595,201 @@ class _NodeDetailsState extends State<NodeDetails> {
                       children: [
                         SizedBox(
                           height: 250,
-                          child: LineChart(
-                            LineChartData(
-                              lineTouchData: LineTouchData(
-                                enabled: true,
-                                handleBuiltInTouches: true,
-                                touchTooltipData: LineTouchTooltipData(
-                                  getTooltipColor: (LineBarSpot touchedSpot) => Colors.blueGrey,
-                                  getTooltipItems: (touchedSpots) {
-                                    return touchedSpots.map((spot) {
-                                      final index = spot.x.toInt();
-                                      return LineTooltipItem(
-                                        '${timeLabels[index]}\n${spot.y.toStringAsFixed(1)}%',
-                                        GoogleFonts.poppins(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
+                          child: GestureDetector(
+                            onScaleStart: (details) {
+                              _previousScale = _scale;
+                              _previousPanOffset = _panOffset;
+                            },
+                            onScaleUpdate: (details) {
+                              setState(() {
+                                // Xử lý pinch-to-zoom
+                                _scale = _previousScale * details.scale;
+                                double zoomFactor = 1 / _scale;
+                                if (_scale < 1.0) _scale = 1.0;
+                                if (_scale > 5.0) _scale = 5.0;
+
+                                // Cập nhật minX, maxX, minY, maxY dựa trên zoom
+                                final originalRangeX = spots.isNotEmpty ? (spots.length - 1).toDouble() : 1.0;
+                                final originalRangeY = spots.isNotEmpty
+                                    ? spots.map((e) => e.y).reduce((a, b) => a > b ? a : b) -
+                                    spots.map((e) => e.y).reduce((a, b) => a < b ? a : b) +
+                                    20
+                                    : 100.0;
+                                final newRangeX = originalRangeX * zoomFactor;
+                                final newRangeY = originalRangeY * zoomFactor;
+
+                                // Tính tâm của biểu đồ hiện tại
+                                final centerX = (minX + maxX) / 2;
+                                final centerY = (minY + maxY) / 2;
+
+                                // Cập nhật phạm vi
+                                minX = centerX - newRangeX / 2;
+                                maxX = centerX + newRangeX / 2;
+                                minY = centerY - newRangeY / 2;
+                                maxY = centerY + newRangeY / 2;
+
+                                // Xử lý di chuyển ngang (pan)
+                                _panOffset = _previousPanOffset + details.focalPointDelta / _scale;
+                                print('Pan offset: dx=${_panOffset.dx}, dy=${_panOffset.dy}');
+                                double deltaX = _panOffset.dx * (maxX - minX) / 150; // Tăng độ nhạy
+
+                                // Di chuyển ngang (trục X)
+                                minX -= deltaX;
+                                maxX -= deltaX;
+
+                                // Giới hạn pan để không vượt quá dữ liệu
+                                if (minX < 0) {
+                                  maxX -= minX;
+                                  minX = 0;
+                                  print('Clamped minX to 0');
+                                }
+                                if (maxX > originalRangeX) {
+                                  minX -= (maxX - originalRangeX);
+                                  maxX = originalRangeX;
+                                  print('Clamped maxX to $originalRangeX');
+                                }
+
+                                print('New bounds: minX=$minX, maxX=$maxX, minY=$minY, maxY=$maxY');
+                              });
+                            },
+                            onScaleEnd: (details) {
+                              _previousPanOffset = _panOffset;
+                            },
+                            child: LineChart(
+                              LineChartData(
+                                lineTouchData: LineTouchData(
+                                  enabled: true,
+                                  handleBuiltInTouches: _scale == 1.0,
+                                  touchTooltipData: LineTouchTooltipData(
+                                    getTooltipColor: (LineBarSpot touchedSpot) => Colors.blueGrey,
+                                    getTooltipItems: (touchedSpots) {
+                                      return touchedSpots.map((spot) {
+                                        final index = spot.x.toInt();
+                                        return LineTooltipItem(
+                                          '${timeLabels[index]}\n${spot.y.toStringAsFixed(1)}%',
+                                          GoogleFonts.poppins(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        );
+                                      }).toList();
+                                    },
+                                  ),
+                                  getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
+                                    return spotIndexes.map((index) {
+                                      return TouchedSpotIndicatorData(
+                                        FlLine(
+                                          color: Colors.blue,
+                                          strokeWidth: 2,
+                                        ),
+                                        FlDotData(
+                                          show: true,
+                                          getDotPainter: (spot, percent, barData, index) =>
+                                              FlDotCirclePainter(
+                                                radius: 6,
+                                                color: Colors.white,
+                                                strokeWidth: 2,
+                                                strokeColor: Colors.blue,
+                                              ),
                                         ),
                                       );
                                     }).toList();
                                   },
                                 ),
-                                getTouchedSpotIndicator:
-                                    (LineChartBarData barData, List<int> spotIndexes) {
-                                  return spotIndexes.map((index) {
-                                    return TouchedSpotIndicatorData(
-                                      FlLine(
-                                        color: Colors.blue,
-                                        strokeWidth: 2,
-                                      ),
-                                      FlDotData(
-                                        show: true,
-                                        getDotPainter: (spot, percent, barData, index) =>
-                                            FlDotCirclePainter(
-                                              radius: 6,
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                              strokeColor: Colors.blue,
-                                            ),
-                                      ),
+                                gridData: FlGridData(
+                                  show: true,
+                                  drawVerticalLine: true,
+                                  getDrawingHorizontalLine: (value) {
+                                    return FlLine(
+                                      color: Colors.grey.withOpacity(0.2),
+                                      strokeWidth: 1,
                                     );
-                                  }).toList();
-                                },
-                              ),
-                              gridData: FlGridData(
-                                show: true,
-                                drawVerticalLine: true,
-                                getDrawingHorizontalLine: (value) {
-                                  return FlLine(
-                                    color: Colors.grey.withOpacity(0.2),
-                                    strokeWidth: 1,
-                                  );
-                                },
-                                getDrawingVerticalLine: (value) {
-                                  return FlLine(
-                                    color: Colors.grey.withOpacity(0.2),
-                                    strokeWidth: 1,
-                                  );
-                                },
-                              ),
-                              titlesData: FlTitlesData(
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 60,
-                                    interval: spots.length > 10 ? spots.length / 5 : 1,
-                                    getTitlesWidget: (value, meta) {
-                                      final index = value.toInt();
-                                      if (index >= 0 && index < timeLabels.length) {
-                                        String label = timeLabels[index].split(' ')[0];
-                                        if (index > 0 &&
-                                            timeLabels[index].split(' ')[0] ==
-                                                timeLabels[index - 1].split(' ')[0]) {
-                                          label = timeLabels[index].split(' ')[1];
-                                        }
-                                        return SideTitleWidget(
-                                          axisSide: meta.axisSide,
-                                          angle: 45 * 3.141592653589793 / 180,
-                                          child: Text(
-                                            label,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 12,
-                                              color: Colors.grey[800],
+                                  },
+                                  getDrawingVerticalLine: (value) {
+                                    return FlLine(
+                                      color: Colors.grey.withOpacity(0.2),
+                                      strokeWidth: 1,
+                                    );
+                                  },
+                                ),
+                                titlesData: FlTitlesData(
+                                  bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      reservedSize: 60,
+                                      interval: spots.length > 10 ? spots.length / 5 : 1,
+                                      getTitlesWidget: (value, meta) {
+                                        final index = value.toInt();
+                                        if (index >= 0 && index < timeLabels.length) {
+                                          String label = timeLabels[index].split(' ')[0];
+                                          if (index > 0 &&
+                                              timeLabels[index].split(' ')[0] ==
+                                                  timeLabels[index - 1].split(' ')[0]) {
+                                            label = timeLabels[index].split(' ')[1];
+                                          }
+                                          return SideTitleWidget(
+                                            axisSide: meta.axisSide,
+                                            angle: 45 * 3.141592653589793 / 180,
+                                            child: Text(
+                                              label,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 12,
+                                                color: Colors.grey[800],
+                                              ),
                                             ),
+                                          );
+                                        }
+                                        return const SizedBox.shrink();
+                                      },
+                                    ),
+                                  ),
+                                  leftTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      reservedSize: 40,
+                                      getTitlesWidget: (value, meta) {
+                                        return Text(
+                                          '${value.toInt()}%',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 12,
+                                            color: Colors.grey[800],
                                           ),
                                         );
-                                      }
-                                      return const SizedBox.shrink();
-                                    },
+                                      },
+                                    ),
                                   ),
+                                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                                 ),
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 40,
-                                    getTitlesWidget: (value, meta) {
-                                      return Text(
-                                        '${value.toInt()}%',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: Colors.grey[800],
-                                        ),
-                                      );
-                                    },
+                                borderData: FlBorderData(
+                                  show: true,
+                                  border: Border.all(color: Colors.grey.withOpacity(0.5)),
+                                ),
+                                lineBarsData: [
+                                  LineChartBarData(
+                                    spots: spots,
+                                    isCurved: true,
+                                    color: const Color.fromRGBO(74, 173, 82, 1),
+                                    barWidth: 3,
+                                    belowBarData: BarAreaData(
+                                      show: true,
+                                      color: const Color.fromRGBO(74, 173, 82, 0.2),
+                                    ),
+                                    dotData: FlDotData(show: true),
                                   ),
+                                ],
+                                minX: minX,
+                                maxX: maxX,
+                                minY: minY,
+                                maxY: maxY,
+                                clipData: FlClipData(
+                                  top: true,
+                                  bottom: true,
+                                  left: true,
+                                  right: true,
                                 ),
-                                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                extraLinesData: ExtraLinesData(),
                               ),
-                              borderData: FlBorderData(
-                                show: true,
-                                border: Border.all(color: Colors.grey.withOpacity(0.5)),
-                              ),
-                              lineBarsData: [
-                                LineChartBarData(
-                                  spots: spots,
-                                  isCurved: true,
-                                  color: const Color.fromRGBO(74, 173, 82, 1),
-                                  barWidth: 3,
-                                  belowBarData: BarAreaData(
-                                    show: true,
-                                    color: const Color.fromRGBO(74, 173, 82, 0.2),
-                                  ),
-                                  dotData: FlDotData(show: true),
-                                ),
-                              ],
-                              minX: minX,
-                              maxX: maxX,
-                              minY: minY,
-                              maxY: maxY,
-                              clipData: FlClipData(
-                                top: true,
-                                bottom: true,
-                                left: true,
-                                right: true,
-                              ),
-                              extraLinesData: ExtraLinesData(),
                             ),
                           ),
                         ),
@@ -719,6 +806,8 @@ class _NodeDetailsState extends State<NodeDetails> {
                                   maxX -= currentRangeX * 0.1;
                                   minY += currentRangeY * 0.1;
                                   maxY -= currentRangeY * 0.1;
+                                  _scale = _scale * 0.9;
+                                  if (_scale < 1.0) _scale = 1.0;
                                 });
                               },
                               style: ElevatedButton.styleFrom(
@@ -742,6 +831,9 @@ class _NodeDetailsState extends State<NodeDetails> {
                                   maxY = spots.isNotEmpty
                                       ? spots.map((e) => e.y).reduce((a, b) => a > b ? a : b) + 10
                                       : 100;
+                                  _scale = 1.0;
+                                  _panOffset = Offset.zero;
+                                  _previousPanOffset = Offset.zero;
                                 });
                               },
                               style: ElevatedButton.styleFrom(
@@ -1040,11 +1132,11 @@ class SmartPlanting extends StatelessWidget {
               onPressed: (int index) {
                 int newMode;
                 if (index == 0) {
-                  newMode = 1; // Bật
+                  newMode = 1;
                 } else if (index == 1) {
-                  newMode = 0; // Tắt
+                  newMode = 0;
                 } else {
-                  newMode = 20; // Tự động
+                  newMode = 20;
                 }
                 motorSwitch(newMode);
               },

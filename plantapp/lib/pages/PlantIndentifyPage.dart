@@ -179,7 +179,7 @@ class _PlantIdentifyPageState extends State<PlantIdentifyPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          "Plant ID Chatbot",
+          "Plant Chatbot",
           style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.w600,

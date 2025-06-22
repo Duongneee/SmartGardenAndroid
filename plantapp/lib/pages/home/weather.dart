@@ -15,14 +15,16 @@ class WeatherContainer extends StatefulWidget {
 class _WeatherContainerState extends State<WeatherContainer> {
   String _weatherInfo = "Loading weather...";
   TextEditingController _cityController = TextEditingController();
-  final String apiKey = dotenv.env['OPENWEATHER_API'] ?? ''; // Lấy từ .env
+  final String apiKey = dotenv.env['OPENWEATHER_API'] ?? '';
 
+  //Khởi tạo ban đầu cho weatherData
   @override
   void initState() {
     super.initState();
     _updateWeatherInfo();
   }
 
+  // Nếu thay đổi dữ liệu sẽ gọi lại cái này
   @override
   void didUpdateWidget(covariant WeatherContainer oldWidget) {
     super.didUpdateWidget(oldWidget);

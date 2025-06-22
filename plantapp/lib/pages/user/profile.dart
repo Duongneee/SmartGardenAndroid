@@ -17,7 +17,7 @@ class ProfilePage extends StatelessWidget {
       appBar: AppBar(
         iconTheme: IconThemeData(
           color:
-              Colors.white, // This sets the color of the leading icon to white
+              Colors.white,
         ),
         title: Padding(
           padding: const EdgeInsets.all(8.0),
@@ -40,7 +40,6 @@ class ProfilePage extends StatelessWidget {
             padding: const EdgeInsets.all(15.0),
             child: GestureDetector(
               onTap: () {
-                // Navigate to the profile page (optional)
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => ProfilePage()),
@@ -95,13 +94,13 @@ class ProfilePage extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: CircleAvatar(
-              radius: 60, // Adjust size as needed
+              radius: 60,
               backgroundColor:
-                  Colors.grey[300], // Default profile picture color
+                  Colors.grey[300],
               child: Icon(
                 Icons.person,
-                size: 100, // Adjust size as needed
-                color: Colors.grey[600], // Default profile picture icon color
+                size: 100,
+                color: Colors.grey[600],
               ),
             ),
           ),
@@ -112,17 +111,17 @@ class ProfilePage extends StatelessWidget {
                 ListTile(
                   leading: Icon(Icons.person),
                   title: Text("Username"),
-                  subtitle: Text(username), // Display name from UserInfo
+                  subtitle: Text(username),
                 ),
                 ListTile(
                   leading: Icon(Icons.location_on),
                   title: Text("Location"),
-                  subtitle: Text(location), // Display location from UserInfo
+                  subtitle: Text(location),
                 ),
                 // ListTile(
                 //   leading: Icon(Icons.eco),
                 //   title: Text("Plant"),
-                //   subtitle: Text(plant), // Display plant from UserInfo
+                //   subtitle: Text(plant),
                 // ),
               ],
             ),

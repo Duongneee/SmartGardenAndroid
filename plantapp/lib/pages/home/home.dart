@@ -1,11 +1,8 @@
-// ignore_for_file: no_leading_underscores_for_local_identifiers, unused_local_variable
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:plantapp/pages/home/homebuttons.dart';
-import 'package:plantapp/pages/macro/MacroDetails.dart';
 import 'package:plantapp/pages/micro/MicroDetails.dart';
-import 'package:plantapp/pages/PlantIndentifyPage.dart'; // Import chatbot
-import 'package:plantapp/pages/user/profile.dart';
+import 'package:plantapp/pages/PlantIndentifyPage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -31,6 +28,7 @@ class _HomeState extends State<Home> {
     _getWeatherFromLocation();
   }
 
+  // lấy email
   void _getCurrentUserEmail() {
     final user = FirebaseAuth.instance.currentUser;
     setState(() {
@@ -38,6 +36,7 @@ class _HomeState extends State<Home> {
     });
   }
 
+// lấy vị trí hiện tại và thời thiết hiện tại
   Future<void> _getWeatherFromLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -59,6 +58,7 @@ class _HomeState extends State<Home> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
+      // lấy để hiển thị lên giao diện
       _currentLocation = await _getCityFromCoordinates(
         position.latitude,
         position.longitude,
@@ -131,6 +131,7 @@ class _HomeState extends State<Home> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
+        // Smart Garden
         title: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Row(
@@ -146,22 +147,6 @@ class _HomeState extends State<Home> {
           ),
         ),
         backgroundColor: const Color.fromRGBO(161, 207, 107, 1),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.all(15.0),
-            child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ProfilePage()),
-                  );
-                },
-                child: const Icon(
-                  Icons.person,
-                  color: Colors.white,
-                )),
-          )
-        ],
       ),
       body: ListView(
         children: [
@@ -180,6 +165,7 @@ class _HomeState extends State<Home> {
                         Color.fromRGBO(74, 173, 82, 1)
                       ])),
             ),
+            // Chào mừng
             Padding(
               padding: const EdgeInsets.all(25.0),
               child: Wrap(direction: Axis.vertical, children: [
@@ -203,6 +189,7 @@ class _HomeState extends State<Home> {
                     ),
                   ],
                 )),
+                // Thời tiết
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: Flex(
@@ -223,6 +210,7 @@ class _HomeState extends State<Home> {
               ]),
             )
           ]),
+          // mục nhập địa điểm
           Padding(
             padding: const EdgeInsets.all(15.0),
             child: TextField(
@@ -253,7 +241,7 @@ class _HomeState extends State<Home> {
             margin: const EdgeInsets.all(15.0),
             padding: const EdgeInsets.all(20.0),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Colors.white, // nền
               borderRadius: BorderRadius.circular(15.0),
               boxShadow: [
                 BoxShadow(
@@ -308,7 +296,7 @@ class _HomeState extends State<Home> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 8),
-            child: GestureDetector(
+            child: GestureDetector( // hỗ trợ nhấn
                 onTap: () {
                   Navigator.push(
                     context,
@@ -331,7 +319,7 @@ class _HomeState extends State<Home> {
                   );
                 },
                 child: const ButtonsHome(
-                  imgpath: "lib/images/news.jpg", // Thay bằng ảnh phù hợp
+                  imgpath: "lib/images/news.jpg",
                   heading: "Plant ID Chatbot",
                 )),
           ),
